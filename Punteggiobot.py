@@ -52,7 +52,6 @@ def gestione_messaggio(update: Update, context: CallbackContext):
     }
     punti_da_aggiungere = 0
 
-    TOKEN = "7996696893:AAHXsH0ZVisRxclXxSVbmlR8FdUaprnwnRA"
     # Controlla se il messaggio contiene parole chiave (case-insensitive)
     for parola, punti in parole_punteggio.items():
         if parola in update.message.text.lower():
