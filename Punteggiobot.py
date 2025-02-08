@@ -27,7 +27,8 @@ def gestione_messaggio(update: Update, context: CallbackContext):
     user_name = user.first_name
 
     # Aggiungere punti solo se il messaggio contiene parole specifiche
-    parole_punteggio = {"#bilancia": 5 punti,
+    parole_punteggio = {
+    "#bilancia": 5,
 	"#colazioneequilibrata": 5,
 	"#collagene": 5,
 	"#bombetta": 5, 
