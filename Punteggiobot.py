@@ -14,7 +14,7 @@ def carica_punteggi():
     except (FileNotFoundError, json.JSONDecodeError):
         return {}  # Se il file non esiste o è corrotto, inizializza con un dizionario vuoto
 
-# Carica i punteggi all'avvio (o inizializza un dizionario vuoto se il file non esiste)
+# Carica i punteggi all'avvio
 punteggi = carica_punteggi()
 
 # Funzione per gestire i messaggi
@@ -26,24 +26,7 @@ def gestione_messaggio(update: Update, context: CallbackContext):
     # Parole chiave e relativi punteggi
     parole_punteggio = {
         "#bilancia": 5,
-        "#colazioneequilibrata": 5,
-        "#collagene": 5,
-        "#bombetta": 5,
-        "#ricostruttore": 5,
-        "#idratazionespecifica": 5,
-        "#phytocomplete": 5,
-        "#pranzobilanciato": 8,
-        "#cenabilanciata": 8,
-        "#spuntino1altri": 8,
-        "#spuntino2altri": 8,
-        "#integrazione1": 8,
-        "#integrazione2": 8,
-        "#workout": 10,
-        "#pastosostitutivo": 10,
-        "#sensazioni": 10,
-        "#kitnewenergy": 10,
-        "#fotoiniziale": 10,
-        "#fotofinale": 10
+        # ... (aggiungi qui le altre parole chiave)
     }
     punti_da_aggiungere = 0
 
@@ -53,9 +36,9 @@ def gestione_messaggio(update: Update, context: CallbackContext):
             punti_da_aggiungere += punti
 
     if punti_da_aggiungere > 0:
-        # Inizializza 'punti' se l'utente è nuovo
+        # Inizializza 'nome' e 'punti' se l'utente è nuovo
         if user_id not in punteggi:
-            punteggi[user_id] = {"nome": user_name, "punti": 0}  # Inizializzazione
+            punteggi[user_id] = {"nome": user_name, "punti": 0}  # Inizializzazione COMPLETA
 
         punteggi[user_id]["punti"] += punti_da_aggiungere
 
@@ -66,7 +49,7 @@ def gestione_messaggio(update: Update, context: CallbackContext):
         except Exception as e:
             print(f"Errore nel salvataggio dei punteggi: {e}")  # Stampa l'errore nei log
 
-        # Risponde con il punteggio aggiornato (menzione utente)
+        # Risponde con il punteggio aggiornato
         update.message.reply_text(f"⭐ {user.mention_html()}, hai guadagnato {punti_da_aggiungere} punti! Totale: {punteggi[user_id]['punti']} punti.", parse_mode="HTML")
 
 # Funzione per mostrare la classifica
@@ -75,20 +58,17 @@ def classifica(update: Update, context: CallbackContext):
         update.message.reply_text(" Nessun punteggio registrato ancora!")
         return
 
-    # Gestisci il caso in cui 'punti' non sia presente (per sicurezza)
-    classifica_ordinata = sorted(punteggi.items(), key=lambda item: item[1].get("punti", 0), reverse=True)  # Usa .get()
+    classifica_ordinata = sorted(punteggi.items(), key=lambda item: item[1].get("punti", 0), reverse=True)
 
     messaggio = " *Classifica Punti* \n\n"
 
-    # Formatta il messaggio con la classifica
     for i, (user_id, dati) in enumerate(classifica_ordinata, 1):
-        messaggio += f"{i}. {dati['nome']} - {dati.get('punti', 0)} punti\n" # Usa .get() anche qui
+        messaggio += f"{i}. {dati.get('nome', 'Sconosciuto')} - {dati.get('punti', 0)} punti\n"  # Gestisci 'nome' mancante
 
     update.message.reply_text(messaggio, parse_mode="Markdown")
 
 # Funzione per resettare la classifica (con conferma)
 def reset_classifica(update: Update, context: CallbackContext):
-    # Chiedi conferma prima di resettare
     update.message.reply_text("Sei sicuro di voler resettare la classifica? /conferma_reset per confermare.")
 
 # Funzione per confermare il reset
