@@ -3,24 +3,19 @@ import json
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 
-# Nome del file dei punteggi (meglio usare una variabile per evitare errori di battitura)
+# Nome del file dei punteggi
 PUNTEGGI_FILE = "punti.json"
 
-
-
-# Funzione per caricare i punteggi (con gestione errori)
+# Funzione per caricare i punteggi
 def carica_punteggi():
     try:
         with open(PUNTEGGI_FILE, "r") as file:
             return json.load(file)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {}  # Inizializza con un dizionario vuoto se il file non esiste o è corrotto
+        return {}  # Se il file non esiste o è corrotto, inizializza con un dizionario vuoto
 
-# Reset automatico all'avvio del bot (e salva subito il reset nel file)
-punteggi = carica_punteggi() #carica i punteggi all'avvio del bot, se non presenti li inizializza vuoti
-# punteggi = {}  # Resetta i punteggi ad ogni avvio (commenta questa riga se non vuoi resettare)
-# with open(PUNTEGGI_FILE, "w") as file:
-#     json.dump(punteggi, file, indent=4)
+# Carica i punteggi all'avvio (o inizializza un dizionario vuoto se il file non esiste)
+punteggi = carica_punteggi()
 
 # Funzione per gestire i messaggi
 def gestione_messaggio(update: Update, context: CallbackContext):
@@ -28,7 +23,7 @@ def gestione_messaggio(update: Update, context: CallbackContext):
     user_id = str(user.id)
     user_name = user.first_name
 
-    # Parole chiave e relativi punteggi (usare un dizionario per chiarezza)
+    # Parole chiave e relativi punteggi
     parole_punteggio = {
         "#bilancia": 5,
         "#colazioneequilibrata": 5,
@@ -58,11 +53,11 @@ def gestione_messaggio(update: Update, context: CallbackContext):
             punti_da_aggiungere += punti
 
     if punti_da_aggiungere > 0:
-        # Aggiorna il punteggio dell'utente (usando .get per gestire utenti nuovi)
+        # Aggiorna il punteggio dell'utente
         punteggi[user_id] = punteggi.get(user_id, {"nome": user_name, "punti": 0})
         punteggi[user_id]["punti"] += punti_da_aggiungere
 
-        # Salva i punteggi (con gestione errori)
+        # Salva i punteggi
         try:
             with open(PUNTEGGI_FILE, "w") as file:
                 json.dump(punteggi, file, indent=4)
@@ -78,11 +73,11 @@ def classifica(update: Update, context: CallbackContext):
         update.message.reply_text(" Nessun punteggio registrato ancora!")
         return
 
-    # Ordina i punteggi per punti (con lambda function)
+    # Ordina i punteggi per punti
     classifica_ordinata = sorted(punteggi.items(), key=lambda item: item[1]["punti"], reverse=True)
     messaggio = " *Classifica Punti* \n\n"
 
-    # Formatta il messaggio con la classifica (usando enumerate per l'indice)
+    # Formatta il messaggio con la classifica
     for i, (user_id, dati) in enumerate(classifica_ordinata, 1):
         messaggio += f"{i}. {dati['nome']} - {dati['punti']} punti\n"
 
@@ -113,7 +108,6 @@ def main():
         return  # Esce se il token non è presente
 
     application = Application.builder().token(TOKEN).build()
-    # application = Application.builder().token(TOKEN).build() #corretto
 
     # Comandi del bot
     application.add_handler(CommandHandler("classifica", classifica))
@@ -129,7 +123,5 @@ def main():
     except Exception as e:
         print(f"Errore durante l'avvio del bot: {e}")  # Stampa l'errore nei log
 
-
-# Esegui il bot solo se il file viene eseguito direttamente (non importato)
 if __name__ == "__main__":
     main()
