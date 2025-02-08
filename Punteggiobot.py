@@ -1,6 +1,6 @@
 import json
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackContext
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 
 # Nome del file dei punteggi
 PUNTEGGI_FILE = "punti.json"
@@ -92,7 +92,7 @@ def reset_classifica(update: Update, context: CallbackContext):
 # **Setup del bot**
 def main():
     TOKEN = "7996696893:AAHXsH0ZVisRxclXxSVbmlR8FdUaprnwnRA"
-    updater = Updater(TOKEN, use_context=True)
+    application = Application.builder().token(TOKEN).build()
     dispatcher = updater.dispatcher
 
     # Comandi del bot
@@ -103,8 +103,7 @@ def main():
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, gestione_messaggio))
 
     # Avvia il bot
-    updater.start_polling()
-    updater.idle()
+    application.run_polling()
 
 # **Eseguire il bot**
 if __name__ == "__main__":
