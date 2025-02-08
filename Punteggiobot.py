@@ -1,13 +1,33 @@
-from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, CommandHandler
 import json
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-TOKEN = "7996696893:AAHXsH0ZVisRxclXxSVbmlR8FdUaprnwnRA"
+# Nome del file dei punteggi
+PUNTEGGI_FILE = "punti.json"
 
+# Funzione per caricare i punteggi
+def carica_punteggi():
+    try:
+        with open(PUNTEGGI_FILE, "r") as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}  # Se il file non esiste o è corrotto, inizializza con un dizionario vuoto
 
-punti = {}
-parole_punti = {
-    "#bilancia": 5,
+# **Reset automatico all'avvio del bot**
+punteggi = {}
+
+# Salva subito il reset nel file
+with open(PUNTEGGI_FILE, "w") as file:
+    json.dump(punteggi, file, indent=4)
+
+# **Funzione per gestire i messaggi**
+def gestione_messaggio(update: Update, context: CallbackContext):
+    user = update.message.from_user
+    user_id = str(user.id)
+    user_name = user.first_name
+
+    # Aggiungere punti solo se il messaggio contiene parole specifiche
+    parole_punteggio = {"#bilancia": 5 punti,
 	"#colazioneequilibrata": 5,
 	"#collagene": 5,
 	"#bombetta": 5, 
@@ -25,66 +45,66 @@ parole_punti = {
 	"#sensazioni": 10, 
 	"#kitnewenergy": 10,
 	"#fotoiniziale": 10,
-	"#fotofinale": 10
-}
+	"#fotofinale": 10}
+    punti_da_aggiungere = 0
 
-def salva_punti():
-    with open("punti.json", "w") as f:
-        json.dump(punti, f)
+    for parola, punti in parole_punteggio.items():
+        if parola in update.message.text.lower():
+            punti_da_aggiungere += punti
 
-def carica_punti():
-    global punti
-    try:
-        with open("punti.json", "r") as f:
-            punti = json.load(f)
-    except FileNotFoundError:
-        punti = {}
+    if punti_da_aggiungere > 0:
+        # Aggiorna il punteggio dell'utente
+        if user_id in punteggi:
+            punteggi[user_id]["punti"] += punti_da_aggiungere
+        else:
+            punteggi[user_id] = {"nome": user_name, "punti": punti_da_aggiungere}
 
-# 🔹 AGGIORNATO: Aggiunto 'async'
-async def gestisci_messaggio(update: Update, context):
-    user_id = update.message.from_user.id
-    username = update.message.from_user.username or update.message.from_user.first_name
-    testo = update.message.text.lower()
-    punti_assegnati = 0  # 🔹 Tiene traccia dei punti guadagnati con il messaggio
+        # Salva i punteggi
+        with open(PUNTEGGI_FILE, "w") as file:
+            json.dump(punteggi, file, indent=4)
 
-    if user_id not in punti:
-        punti[user_id] = {"username": username, "score": 0}
+        # Risponde con il punteggio aggiornato
+        update.message.reply_text(f"⭐ {user_name}, hai guadagnato {punti_da_aggiungere} punti! Totale: {punteggi[user_id]['punti']} punti.")
 
-    # 🔹 Controlla se il messaggio contiene parole chiave
-    for parola, valore in parole_punti.items():
-        if parola in testo:
-            punti[user_id]["score"] += valore
-            punti_assegnati += valore  # 🔹 Aggiunge i punti ottenuti in questo messaggio
+# **Funzione per mostrare la classifica**
+def classifica(update: Update, context: CallbackContext):
+    if not punteggi:
+        update.message.reply_text("🏆 Nessun punteggio registrato ancora!")
+        return
 
-    salva_punti()
+    classifica_ordinata = sorted(punteggi.items(), key=lambda x: x[1]["punti"], reverse=True)
+    messaggio = "🏆 *Classifica Punti* 🏆\n\n"
 
-    # 🔹 Se il messaggio ha guadagnato punti, invia una risposta
-    if punti_assegnati > 0:
-        await update.message.reply_text(
-            f"🎉 {username}, hai guadagnato {punti_assegnati} punti!\n"
-            f"🔢 Totale: {punti[user_id]['score']} punti."
-        )
+    for i, (user_id, dati) in enumerate(classifica_ordinata, 1):
+        messaggio += f"{i}. {dati['nome']} - {dati['punti']} punti\n"
 
-# 🔹 AGGIORNATO: Aggiunto 'async'
-async def mostra_classifica(update: Update, context):
-    # Ordina la classifica per punteggio decrescente
-    classifica = sorted(punti.values(), key=lambda x: x["score"], reverse=True)
-    
-    # Costruisce il testo della classifica
-    testo = "🏆 *Classifica Punti* 🏆\n\n"
-    for i, data in enumerate(classifica):
-        testo += f"{i+1}. {data['username']} - {data['score']} punti\n"
+    update.message.reply_text(messaggio, parse_mode="Markdown")
 
-    await update.message.reply_text(testo, parse_mode="Markdown")
+# **Funzione per resettare la classifica con il comando /reset**
+def reset_classifica(update: Update, context: CallbackContext):
+    global punteggi
+    punteggi = {}  # Svuota il dizionario
+    with open(PUNTEGGI_FILE, "w") as file:
+        json.dump(punteggi, file, indent=4)  # Salva il reset
+    update.message.reply_text("🔄 Classifica resettata con successo!")
 
+# **Setup del bot**
 def main():
-    carica_punti()
-    app = Application.builder().token(TOKEN).build()
+    TOKEN = "7996696893:AAHXsH0ZVisRxclXxSVbmlR8FdUaprnwnRA"
+    updater = Updater(TOKEN, use_context=True)
+    dispatcher = updater.dispatcher
 
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gestisci_messaggio))
-    app.add_handler(CommandHandler("classifica", mostra_classifica))
+    # Comandi del bot
+    dispatcher.add_handler(CommandHandler("classifica", classifica))
+    dispatcher.add_handler(CommandHandler("reset", reset_classifica))
 
-    app.run_polling()
+    # Gestione messaggi
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, gestione_messaggio))
 
+    # Avvia il bot
+    updater.start_polling()
+    updater.idle()
+
+# **Eseguire il bot**
 if __name__ == "__main__":
     main()
