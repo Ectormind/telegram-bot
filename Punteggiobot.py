@@ -53,8 +53,10 @@ def gestione_messaggio(update: Update, context: CallbackContext):
             punti_da_aggiungere += punti
 
     if punti_da_aggiungere > 0:
-        # Aggiorna il punteggio dell'utente
-        punteggi[user_id] = punteggi.get(user_id, {"nome": user_name, "punti": 0})
+        # Inizializza 'punti' se l'utente è nuovo
+        if user_id not in punteggi:
+            punteggi[user_id] = {"nome": user_name, "punti": 0}  # Inizializzazione
+
         punteggi[user_id]["punti"] += punti_da_aggiungere
 
         # Salva i punteggi
@@ -73,13 +75,14 @@ def classifica(update: Update, context: CallbackContext):
         update.message.reply_text(" Nessun punteggio registrato ancora!")
         return
 
-    # Ordina i punteggi per punti
-    classifica_ordinata = sorted(punteggi.items(), key=lambda item: item[1]["punti"], reverse=True)
+    # Gestisci il caso in cui 'punti' non sia presente (per sicurezza)
+    classifica_ordinata = sorted(punteggi.items(), key=lambda item: item[1].get("punti", 0), reverse=True)  # Usa .get()
+
     messaggio = " *Classifica Punti* \n\n"
 
     # Formatta il messaggio con la classifica
     for i, (user_id, dati) in enumerate(classifica_ordinata, 1):
-        messaggio += f"{i}. {dati['nome']} - {dati['punti']} punti\n"
+        messaggio += f"{i}. {dati['nome']} - {dati.get('punti', 0)} punti\n" # Usa .get() anche qui
 
     update.message.reply_text(messaggio, parse_mode="Markdown")
 
