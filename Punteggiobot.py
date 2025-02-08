@@ -4,6 +4,7 @@ import json
 
 TOKEN = "7996696893:AAHXsH0ZVisRxclXxSVbmlR8FdUaprnwnRA"
 
+
 punti = {}
 parole_punti = {
     "#bilancia": 5,
