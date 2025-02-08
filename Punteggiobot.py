@@ -102,9 +102,7 @@ async def main():  # Aggiunto async
 
     # Avvia il bot (con gestione errori)
     try:
-        await application.initialize()  # Aggiunto await
-        await application.start_polling()  # Aggiunto await
-        await application.idle()  # Aggiunto await
+        application.run_polling()  # Chiamata diretta, *senza* await
     except Exception as e:
         print(f"Errore durante l'avvio del bot: {e}")  # Stampa l'errore nei log
 
