@@ -1,13 +1,18 @@
+from flask import Flask, request
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import datetime
 import os
+import logging
 
-# Token del bot
-TOKEN = os.getenv("TOKEN")  # Usa la variabile d'ambiente su Railway
+# Configurazione Logging
+logging.basicConfig(level=logging.INFO)
 
-# Webhook URL - sostituiscilo con il tuo dominio di Railway
-WEBHOOK_URL = "https://telegram-bot-production-2303.up.railway.app"  # Cambia con il link di Railway
+# Token del bot (da Railway)
+TOKEN = os.getenv("TOKEN")
+
+# Webhook URL - sostituiscilo con il dominio Railway generato
+WEBHOOK_URL = "https://telegram-bot-production-2303.up.railway.app"
 
 # Dizionario per memorizzare la classifica degli utenti
 classifica = {}
@@ -37,6 +42,12 @@ parole_punteggio = {
     "#fotoiniziale": 10,
     "#fotofinale": 10
 }
+
+# Inizializza Flask
+app = Flask(__name__)
+
+# Inizializza il bot
+application = Application.builder().token(TOKEN).build()
 
 ### --- FUNZIONI DEL BOT --- ###
 
@@ -89,25 +100,23 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"{utente}, hai già usato questi hashtag oggi. ⏳ Prova domani!")
 
-### --- MAIN --- ###
-def main():
-    """Avvia il bot con Webhook"""
-    application = Application.builder().token(TOKEN).build()
+# Aggiunta comandi al bot
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("classifica", classifica_bot))
+application.add_handler(CommandHandler("reset", reset))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gestisci_messaggi))
 
-    # Aggiungi i comandi
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("classifica", classifica_bot))
-    application.add_handler(CommandHandler("reset", reset))
-    
-    # Aggiungi un handler per i messaggi normali
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gestisci_messaggi))
+### --- WEBHOOK CON FLASK --- ###
 
-    # Avvia il Webhook invece di Polling
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=8080,
-        webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
-    )
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    """Gestisce le richieste Webhook di Telegram"""
+    update = Update.de_json(request.get_json(), application.bot)
+    logging.info(f"Ricevuto update: {update}")
+    application.process_update(update)
+    return "OK", 200
 
 if __name__ == "__main__":
-    main()
+    from waitress import serve
+    print("⚡ Il bot è avviato e in ascolto su Railway...")
+    serve(app, host="0.0.0.0", port=8080)
