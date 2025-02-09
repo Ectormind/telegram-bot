@@ -2,33 +2,17 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # Token del bot
-TOKEN = "7996696893:AAHXsH0ZVisRxclXxSVbmlR8FdUaprnwnRA"
+TOKEN = "IL_TUO_TOKEN"
 
 # Dizionario per memorizzare la classifica degli utenti
 classifica = {}
 
 # Dizionario con le parole e i relativi punteggi
 parole_punteggio = {
-    parole_punteggio = {
     "#bilancia": 5,
-	"#colazioneequilibrata": 5,
-	"#collagene": 5,
-	"#bombetta": 5, 
-	"#ricostruttore": 5,
-	"#idratazionespecifica": 5,
-	"#phytocomplete": 5, 
-	"#pranzobilanciato": 8,
-	"#cenabilanciata": 8,
-	"#spuntino1 altri": 8, 
-	"#spuntino2 altri": 8,
-	"#integrazione1": 8, 
-	"#integrazione2": 8,
-	"#workout": 10,
-	"#pastosostitutivo": 10,
-	"#sensazioni": 10, 
-	"#kitnewenergy": 10,
-	"#fotoiniziale": 10,
-	"#fotofinale": 10}
+    "#salute": 3,
+    "#felicità": 2
+}
 
 ### --- FUNZIONI DEL BOT --- ###
 
@@ -78,4 +62,14 @@ def main():
     # Aggiungi i comandi
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("punteggio", punteggio))
-    application.add_handler(CommandHandler("rese
+    application.add_handler(CommandHandler("reset", reset))
+
+    # Aggiungi un handler per i messaggi normali
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gestisci_messaggi))
+
+    # Avvia il bot
+    application.run_polling()
+
+if __name__ == "__main__":
+    main()
+
