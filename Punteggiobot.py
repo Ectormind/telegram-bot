@@ -22,8 +22,8 @@ parole_punteggio = {
     "#phytocomplete": 5,
     "#pranzobilanciato": 8,
     "#cenabilanciata": 8,
-    "#spuntino1 altri": 8,
-    "#spuntino2 altri": 8,
+    "#spuntino1": 8,
+    "#spuntino2": 8,
     "#integrazione1": 8,
     "#integrazione2": 8,
     "#workout": 10,
@@ -55,10 +55,10 @@ async def classifica_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Resetta la classifica e i record di hashtag usati"""
+    """Resetta la classifica e il registro degli hashtag usati"""
     classifica.clear()
-    hashtag_usati.clear()
-    await update.message.reply_text("🔄 Classifica e record hashtag resettati con successo!")
+    hashtag_usati.clear()  # Ora cancella anche il registro degli hashtag usati
+    await update.message.reply_text("🔄 Classifica e limitazioni resettate con successo! Tutti possono ripartire da zero.")
 
 
 async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
