@@ -1,9 +1,13 @@
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import datetime
+import os
 
 # Token del bot
-TOKEN = "7996696893:AAHXsH0ZVisRxclXxSVbmlR8FdUaprnwnRA"
+TOKEN = os.getenv("TOKEN")  # Usa la variabile d'ambiente su Railway
+
+# Webhook URL - sostituiscilo con il tuo dominio di Railway
+WEBHOOK_URL = "https://telegram-bot-production-2303.up.railway.app"  # Cambia con il link di Railway
 
 # Dizionario per memorizzare la classifica degli utenti
 classifica = {}
@@ -40,14 +44,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Messaggio di benvenuto"""
     await update.message.reply_text("Ciao! Invia un messaggio con un hashtag per accumulare punti!")
 
-
 async def classifica_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mostra la classifica attuale"""
     if not classifica:
         await update.message.reply_text("🏆 La classifica è vuota!")
         return
-
-    print(f"DEBUG: Classifica attuale: {classifica}")  # Controllo per debug
 
     classifica_ordinata = sorted(classifica.items(), key=lambda x: x[1], reverse=True)
     
@@ -57,13 +58,11 @@ async def classifica_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(messaggio)
 
-
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Resetta la classifica e il registro degli hashtag usati"""
     classifica.clear()
-    hashtag_usati.clear()  # Ora cancella anche il registro degli hashtag usati
+    hashtag_usati.clear()
     await update.message.reply_text("🔄 Classifica e limitazioni resettate con successo! Tutti possono ripartire da zero.")
-
 
 async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Aggiunge punti agli utenti in base agli hashtag nei messaggi, evitando ripetizioni giornaliere"""
@@ -80,38 +79,35 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     punti_totali = 0
     for parola, punti in parole_punteggio.items():
         if parola in messaggio:
-            # Controlla se l'utente ha già guadagnato punti per questa parola oggi
             if parola not in hashtag_usati[utente] or hashtag_usati[utente][parola] != oggi:
                 punti_totali += punti
                 hashtag_usati[utente][parola] = oggi  # Segna la parola come usata oggi
 
     if punti_totali > 0:
-        if utente not in classifica:
-            classifica[utente] = 0  # Se l'utente non è nella classifica, inizializza il punteggio
-
-        classifica[utente] += punti_totali  # Aggiunge i punti senza sovrascrivere
-        print(f"DEBUG: {utente} ha ora {classifica[utente]} punti.")  # Debug per controllare i punti
-
+        classifica[utente] = classifica.get(utente, 0) + punti_totali
         await update.message.reply_text(f"{utente} ha guadagnato {punti_totali} punti! 🎉 Ora ha {classifica[utente]} punti totali.")
     else:
         await update.message.reply_text(f"{utente}, hai già usato questi hashtag oggi. ⏳ Prova domani!")
 
-
 ### --- MAIN --- ###
 def main():
-    """Avvia il bot"""
+    """Avvia il bot con Webhook"""
     application = Application.builder().token(TOKEN).build()
 
     # Aggiungi i comandi
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("classifica", classifica_bot))
     application.add_handler(CommandHandler("reset", reset))
-
+    
     # Aggiungi un handler per i messaggi normali
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gestisci_messaggi))
 
-    # Avvia il bot
-    application.run_polling()
+    # Avvia il Webhook invece di Polling
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=8080,
+        webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
+    )
 
 if __name__ == "__main__":
     main()
