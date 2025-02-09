@@ -1,5 +1,0 @@
-[phases.build]
-build = "pip install -r requirements.txt"
-
-[phases.start]
-start = "python Punteggiobot.py"
