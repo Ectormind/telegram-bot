@@ -47,8 +47,12 @@ async def classifica_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🏆 La classifica è vuota!")
         return
 
+    print(f"DEBUG: Classifica attuale: {classifica}")  # Controllo per debug
+
+    classifica_ordinata = sorted(classifica.items(), key=lambda x: x[1], reverse=True)
+    
     messaggio = "🏆 Classifica attuale:\n"
-    for utente, punti in sorted(classifica.items(), key=lambda x: x[1], reverse=True):
+    for utente, punti in classifica_ordinata:
         messaggio += f"{utente}: {punti} punti\n"
 
     await update.message.reply_text(messaggio)
@@ -82,8 +86,13 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 hashtag_usati[utente][parola] = oggi  # Segna la parola come usata oggi
 
     if punti_totali > 0:
-        classifica[utente] = classifica.get(utente, 0) + punti_totali
-        await update.message.reply_text(f"{utente} ha guadagnato {punti_totali} punti! 🎉")
+        if utente not in classifica:
+            classifica[utente] = 0  # Se l'utente non è nella classifica, inizializza il punteggio
+
+        classifica[utente] += punti_totali  # Aggiunge i punti senza sovrascrivere
+        print(f"DEBUG: {utente} ha ora {classifica[utente]} punti.")  # Debug per controllare i punti
+
+        await update.message.reply_text(f"{utente} ha guadagnato {punti_totali} punti! 🎉 Ora ha {classifica[utente]} punti totali.")
     else:
         await update.message.reply_text(f"{utente}, hai già usato questi hashtag oggi. ⏳ Prova domani!")
 
