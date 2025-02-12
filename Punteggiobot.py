@@ -108,7 +108,8 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gestisci
 
 ### --- WEBHOOK CON FLASK --- ###
 
-@app.route(f"/{TOKEN}", methods=["POST"])
+@app.route("/", methods=["POST"])
+
 def webhook():
     """Gestisce le richieste Webhook di Telegram"""
     update = Update.de_json(request.get_json(), application.bot)
