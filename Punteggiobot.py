@@ -112,7 +112,8 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gestisci
 ### --- WEBHOOK CON FLASK (Corretto `process_update()`) --- ###
 
 async def process_update_async(update):
-    """Elabora gli aggiornamenti di Telegram"""
+    """Inizializza il bot e processa gli aggiornamenti"""
+    await application.initialize()
     await application.process_update(update)
 
 @app.route("/", methods=["POST"])
@@ -129,7 +130,6 @@ def webhook():
 ### --- AVVIO DEL SERVER CON KEEP-ALIVE --- ###
 def keep_alive():
     """Ping ogni 5 minuti per mantenere attivo Railway"""
-    import threading
     import time
     import requests
     while True:
@@ -148,3 +148,4 @@ if __name__ == "__main__":
 
     # Avvia il server Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
