@@ -122,8 +122,8 @@ def webhook():
     update = Update.de_json(request.get_json(), application.bot)
     logging.info(f"Ricevuto update: {update}")
     
-    # Esegui la funzione async con `asyncio.run()`
-    asyncio.run(process_update_async(update))
+    # Esegui la funzione async con `asyncio.create_task()` invece di `asyncio.run()`
+    asyncio.create_task(process_update_async(update))
     
     return "OK", 200
 
