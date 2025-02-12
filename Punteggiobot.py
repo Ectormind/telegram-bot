@@ -79,27 +79,32 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔄 Classifica e limitazioni resettate con successo! Tutti possono ripartire da zero.")
 
 async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Aggiunge punti agli utenti in base agli hashtag nei messaggi, evitando ripetizioni giornaliere"""
     messaggio = update.message.text
     utente = update.message.from_user.username or update.message.from_user.first_name
 
     if not utente:
-        return  # Se l'utente non ha un username, ignora
+        return  
 
     oggi = datetime.date.today()
     if utente not in hashtag_usati:
         hashtag_usati[utente] = {}
 
     punti_totali = 0
+    parole_trovate = []
+
+    # Controlla se il messaggio contiene parole chiave
     for parola, punti in parole_punteggio.items():
         if parola in messaggio:
+            parole_trovate.append(parola)
             if parola not in hashtag_usati[utente] or hashtag_usati[utente][parola] != oggi:
                 punti_totali += punti
-                hashtag_usati[utente][parola] = oggi  # Segna la parola come usata oggi
+                hashtag_usati[utente][parola] = oggi  
 
     if punti_totali > 0:
         classifica[utente] = classifica.get(utente, 0) + punti_totali
         await update.message.reply_text(f"{utente} ha guadagnato {punti_totali} punti! 🎉 Ora ha {classifica[utente]} punti totali.")
+    elif not parole_trovate:
+        return  # 🔴 Non risponde se nessuna parola chiave è trovata
     else:
         await update.message.reply_text(f"{utente}, hai già usato questi hashtag oggi. ⏳ Prova domani!")
 
