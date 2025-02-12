@@ -4,6 +4,8 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 import datetime
 import os
 import logging
+import asyncio
+from waitress import serve
 
 # Configurazione Logging
 logging.basicConfig(level=logging.INFO)
@@ -106,18 +108,42 @@ application.add_handler(CommandHandler("classifica", classifica_bot))
 application.add_handler(CommandHandler("reset", reset))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gestisci_messaggi))
 
-### --- WEBHOOK CON FLASK --- ###
+### --- WEBHOOK CON FLASK (Corretto `process_update()`) --- ###
+
+async def process_update_async(update):
+    """Elabora gli aggiornamenti di Telegram"""
+    await application.process_update(update)
 
 @app.route("/", methods=["POST"])
-
 def webhook():
     """Gestisce le richieste Webhook di Telegram"""
     update = Update.de_json(request.get_json(), application.bot)
     logging.info(f"Ricevuto update: {update}")
-    application.process_update(update)
+    
+    # Esegui la funzione async con `asyncio.run()`
+    asyncio.run(process_update_async(update))
+    
     return "OK", 200
 
+### --- AVVIO DEL SERVER CON KEEP-ALIVE --- ###
+def keep_alive():
+    """Ping ogni 5 minuti per mantenere attivo Railway"""
+    import threading
+    import time
+    import requests
+    while True:
+        time.sleep(300)
+        try:
+            requests.get(WEBHOOK_URL)
+            logging.info("🔄 Ping inviato per mantenere Railway attivo")
+        except Exception as e:
+            logging.error(f"⚠️ Errore nel ping: {e}")
+
 if __name__ == "__main__":
-    from waitress import serve
-    print("⚡ Il bot è avviato e in ascolto su Railway...")
+    logging.info("⚡ Il bot è avviato e in ascolto su Railway...")
+    
+    # Avvia il ping per evitare che Railway chiuda il bot
+    threading.Thread(target=keep_alive, daemon=True).start()
+
+    # Avvia il server Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
