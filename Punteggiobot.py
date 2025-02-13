@@ -140,6 +140,12 @@ async def invia_classifica_giornaliera():
             await asyncio.sleep(60)  # Evita invii multipli
         await asyncio.sleep(30)  # Controlla ogni 30 secondi
 
+def avvia_classifica_thread():
+    """Avvia il loop per inviare la classifica giornaliera in un thread separato"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(invia_classifica_giornaliera())
+
 # Aggiunta comandi al bot
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("classifica", classifica_bot))
@@ -164,23 +170,11 @@ def webhook():
     
     return "OK", 200
 
-### --- AVVIO DEL SERVER CON KEEP-ALIVE --- ###
-def keep_alive():
-    """Ping ogni 5 minuti per mantenere attivo Railway"""
-    import time
-    import requests
-    while True:
-        time.sleep(300)
-        try:
-            requests.get(WEBHOOK_URL)
-            logging.info("🔄 Ping inviato per mantenere Railway attivo")
-        except Exception as e:
-            logging.error(f"⚠️ Errore nel ping: {e}")
-
 if __name__ == "__main__":
     logging.info("⚡ Il bot è avviato e in ascolto su Railway...")
     
-    threading.Thread(target=keep_alive, daemon=True).start()
-    asyncio.create_task(invia_classifica_giornaliera())
+    threading.Thread(target=avvia_classifica_thread, daemon=True).start()
 
+    # Avvia il server Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
