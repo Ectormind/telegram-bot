@@ -79,11 +79,14 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔄 Classifica e limitazioni resettate con successo! Tutti possono ripartire da zero.")
 
 async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    messaggio = update.message.text
-    utente = update.message.from_user.username or update.message.from_user.first_name
+    """Aggiunge punti agli utenti in base agli hashtag nei messaggi o nelle didascalie delle foto"""
+    messaggio = update.message.text or update.message.caption  # ✅ Supporta sia testo che didascalie
+    if not messaggio:
+        return  # Se il messaggio non ha né testo né didascalia, ignoralo
 
+    utente = update.message.from_user.username or update.message.from_user.first_name
     if not utente:
-        return  
+        return  # Se l'utente non ha un username, ignora
 
     oggi = datetime.date.today()
     if utente not in hashtag_usati:
@@ -112,7 +115,7 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("classifica", classifica_bot))
 application.add_handler(CommandHandler("reset", reset))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gestisci_messaggi))
+application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, gestisci_messaggi))
 
 ### --- WEBHOOK CON FLASK (Corretto `process_update()`) --- ###
 
