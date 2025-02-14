@@ -156,19 +156,20 @@ async def webhook():
     await application.process_update(update)
     return "OK", 200
 
-def set_webhook():
-    """Imposta il Webhook di Telegram."""
+async def set_webhook():
+    """Imposta il Webhook di Telegram in modo asincrono."""
     url = f"{WEBHOOK_URL}/webhook"
-    application.bot.set_webhook(url)
+    await application.bot.set_webhook(url)
     logging.info(f"✅ Webhook impostato su {url}")
-
 if __name__ == "__main__":
     logging.info("⚡ Il bot è avviato e in ascolto su Railway...")
 
+    # Carica la classifica salvata
     carica_classifica()
-    set_webhook()
+
+    # Imposta il Webhook in modo asincrono
+    asyncio.run(set_webhook())
 
     # Avvia il server Flask
     serve(app, host="0.0.0.0", port=8080)
-
 
