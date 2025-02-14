@@ -5,7 +5,6 @@ import datetime
 import os
 import logging
 import asyncio
-import threading
 import json
 from waitress import serve
 
@@ -15,7 +14,7 @@ logging.basicConfig(level=logging.INFO)
 # Token del bot (da Railway)
 TOKEN = os.getenv("TOKEN")
 
-# Webhook URL - sostituiscilo con il dominio Railway generato
+# Webhook URL - Sostituiscilo con il dominio Railway generato
 WEBHOOK_URL = "https://telegram-bot-production-2303.up.railway.app"
 
 # Variabili globali
@@ -30,25 +29,11 @@ hashtag_usati = {}
 
 # Dizionario con le parole e i relativi punteggi
 parole_punteggio = {
-    "#bilancia": 5,
-    "#colazioneequilibrata": 5,
-    "#collagene": 5,
-    "#bombetta": 5,
-    "#ricostruttore": 5,
-    "#idratazionespecifica": 5,
-    "#phytocomplete": 5,
-    "#pranzobilanciato": 8,
-    "#cenabilanciata": 8,
-    "#spuntino1": 8,
-    "#spuntino2": 8,
-    "#integrazione1": 8,
-    "#integrazione2": 8,
-    "#workout": 10,
-    "#pastosostitutivo": 10,
-    "#sensazioni": 10,
-    "#kitnewenergy": 10,
-    "#fotoiniziale": 10,
-    "#fotofinale": 10
+    "#bilancia": 5, "#colazioneequilibrata": 5, "#collagene": 5, "#bombetta": 5,
+    "#ricostruttore": 5, "#idratazionespecifica": 5, "#phytocomplete": 5, "#pranzobilanciato": 8,
+    "#cenabilanciata": 8, "#spuntino1": 8, "#spuntino2": 8, "#integrazione1": 8,
+    "#integrazione2": 8, "#workout": 10, "#pastosostitutivo": 10, "#sensazioni": 10,
+    "#kitnewenergy": 10, "#fotoiniziale": 10, "#fotofinale": 10
 }
 
 # Inizializza Flask
@@ -164,21 +149,26 @@ async def invia_classifica_giornaliera():
         else:
             await asyncio.sleep(30)  
 
-def avvia_classifica_thread():
-    """Avvia il loop per inviare la classifica giornaliera in un thread separato"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(invia_classifica_giornaliera())
+@app.route("/webhook", methods=["POST"])
+async def webhook():
+    """Gestisce le richieste in arrivo dal Webhook di Telegram."""
+    update = Update.de_json(request.get_json(), application.bot)
+    await application.process_update(update)
+    return "OK", 200
+
+def set_webhook():
+    """Imposta il Webhook di Telegram."""
+    url = f"{WEBHOOK_URL}/webhook"
+    application.bot.set_webhook(url)
+    logging.info(f"✅ Webhook impostato su {url}")
 
 if __name__ == "__main__":
     logging.info("⚡ Il bot è avviato e in ascolto su Railway...")
 
-    # 🔹 Carica la classifica salvata all'avvio
     carica_classifica()
+    set_webhook()
 
-    threading.Thread(target=avvia_classifica_thread, daemon=True).start()
-
-    # Avvia il server Flask con Waitress
+    # Avvia il server Flask
     serve(app, host="0.0.0.0", port=8080)
 
 
