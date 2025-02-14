@@ -1,5 +1,3 @@
-ultima_data_invio = None  # Memorizza il giorno dell'ultimo invio della classifica
-
 from flask import Flask, request
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -122,14 +120,12 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ### --- INVIO AUTOMATICO DELLA CLASSIFICA A MEZZANOTTE --- ###
 
 async def invia_classifica_giornaliera():
-    """Invia automaticamente la classifica alle 00:00, ma solo una volta al giorno"""
-    global ultimo_chat_id, ultima_data_invio
+    """Invia automaticamente la classifica alle 00:00 se ci sono stati aggiornamenti"""
+    global ultimo_chat_id
     while True:
-        ora_corrente = datetime.datetime.now()
-        
-        # Controlla se è mezzanotte e se la classifica non è già stata inviata oggi
-        if ora_corrente.hour == 0 and ora_corrente.minute < 5:
-            if classifica and ultimo_chat_id and (ultima_data_invio != ora_corrente.date()):
+        ora_corrente = datetime.datetime.now().time()
+        if ora_corrente.hour == 0 and ora_corrente.minute < 5:  # Controlla tra mezzanotte e le 00:05
+            if classifica and ultimo_chat_id:
                 classifica_ordinata = sorted(classifica.items(), key=lambda x: x[1], reverse=True)
                 messaggio = "🏆 Classifica giornaliera 🏆\n"
                 for utente, punti in classifica_ordinata:
@@ -138,13 +134,11 @@ async def invia_classifica_giornaliera():
                 try:
                     await application.bot.send_message(chat_id=ultimo_chat_id, text=messaggio)
                     logging.info(f"✅ Classifica inviata alla chat {ultimo_chat_id}")
-                    ultima_data_invio = ora_corrente.date()  # Memorizza la data dell'ultimo invio
                 except Exception as e:
                     logging.error(f"❌ Errore nell'invio della classifica: {e}")
 
-            await asyncio.sleep(300)  # Aspetta 5 minuti per evitare ripetizioni
-        else:
-            await asyncio.sleep(30)  # Controlla ogni 30 secondi
+            await asyncio.sleep(60)  # Evita invii multipli
+        await asyncio.sleep(30)  # Controlla ogni 30 secondi
 
 def avvia_classifica_thread():
     """Avvia il loop per inviare la classifica giornaliera in un thread separato"""
@@ -183,6 +177,7 @@ if __name__ == "__main__":
 
     # Avvia il server Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
 
 
 
