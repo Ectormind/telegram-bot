@@ -158,16 +158,15 @@ async def process_update_async(update):
     await application.initialize()
     await application.process_update(update)
 
-@app.route("/", methods=["POST"])
+@app.route("/webhook", methods=["POST"])
 def webhook():
-    """Gestisce le richieste Webhook di Telegram"""
-    update = Update.de_json(request.get_json(), application.bot)
-    logging.info(f"Ricevuto update: {update}")
-    
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(process_update_async(update))
-    
+    """Gestisce il Webhook di Telegram"""
+    data = request.get_json()
+    logging.info(f"📩 Ricevuto update: {data}")
+
+    update = Update.de_json(data, application.bot)
+    application.create_task(application.process_update(update))
+
     return "OK", 200
 
 if __name__ == "__main__":
