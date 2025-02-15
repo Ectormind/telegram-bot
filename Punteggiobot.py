@@ -175,7 +175,13 @@ if __name__ == "__main__":
 
     carica_classifica()  # Carica la classifica dal file
 
-    threading.Thread(target=invia_classifica_giornaliera, daemon=True).start()
+    def avvia_classifica_thread():
+    loop = asyncio.new_event_loop()  # Crea un nuovo event loop
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(invia_classifica_giornaliera())  # Esegue la funzione async
+
+# Avvia la funzione in un thread separato
+threading.Thread(target=avvia_classifica_thread, daemon=True).start()
 
     # Avvia il server Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
