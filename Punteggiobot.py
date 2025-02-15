@@ -18,7 +18,7 @@ WEBHOOK_URL = "https://telegram-bot-production-2303.up.railway.app"
 
 # Variabili globali
 ultimo_chat_id = None  
-ultima_data_invio = None  # Memorizza l'ultima data di invio della classifica
+ultima_data_invio = None  
 classifica = {}
 hashtag_usati = {}
 
@@ -85,11 +85,11 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Resetta la classifica e il registro degli hashtag usati"""
     classifica.clear()
     hashtag_usati.clear()
-    salva_classifica()  # Cancella il file JSON
-    await update.message.reply_text("🔄 Classifica e limitazioni resettate con successo! Tutti possono ripartire da zero.")
+    salva_classifica()
+    await update.message.reply_text("🔄 Classifica e limitazioni resettate con successo!")
 
 async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Aggiunge punti agli utenti in base agli hashtag nei messaggi o nelle didascalie delle foto"""
+    """Gestisce i messaggi e assegna punti in base agli hashtag"""
     messaggio = update.message.text or update.message.caption
     if not messaggio:
         return  
@@ -114,77 +114,68 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if punti_totali > 0:
         classifica[utente] = classifica.get(utente, 0) + punti_totali
-        salva_classifica()  # Salva la classifica appena aggiornata!
+        salva_classifica()  
         await update.message.reply_text(f"{utente} ha guadagnato {punti_totali} punti! 🎉 Ora ha {classifica[utente]} punti totali.")
     elif not parole_trovate:
         return  
     else:
         await update.message.reply_text(f"{utente}, hai già usato questi hashtag oggi. ⏳ Prova domani!")
 
-# Invio automatico della classifica a mezzanotte
+# Webhook Telegram
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.get_json()
+    update = Update.de_json(data, application.bot)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(application.initialize())
+    loop.run_until_complete(application.process_update(update))
+    return "OK", 200
+
+# Invio classifica giornaliera
 async def invia_classifica_giornaliera():
-    """Invia la classifica alle 00:00 UNA SOLA VOLTA AL GIORNO"""
     global ultima_data_invio
     while True:
         ora_corrente = datetime.datetime.now()
-
-        if ora_corrente.hour == 0 and ora_corrente.minute < 5:  # Controlla solo tra le 00:00 e le 00:05
+        if ora_corrente.hour == 0 and ora_corrente.minute < 5:  
             if classifica and ultimo_chat_id and (ultima_data_invio != ora_corrente.date()):
                 classifica_ordinata = sorted(classifica.items(), key=lambda x: x[1], reverse=True)
-                messaggio = "🏆 Classifica giornaliera 🏆\n"
-                for utente, punti in classifica_ordinata:
-                    messaggio += f"{utente}: {punti} punti\n"
+                messaggio = "🏆 Classifica giornaliera 🏆\n" + "\n".join(f"{u}: {p} punti" for u, p in classifica_ordinata)
 
                 try:
                     await application.bot.send_message(chat_id=ultimo_chat_id, text=messaggio)
                     logging.info(f"✅ Classifica inviata alla chat {ultimo_chat_id}")
-                    ultima_data_invio = ora_corrente.date()  # Ora viene registrato il giorno dell'ultimo invio
+                    ultima_data_invio = ora_corrente.date()
                 except Exception as e:
                     logging.error(f"❌ Errore nell'invio della classifica: {e}")
 
-            await asyncio.sleep(3600)  # Aspetta un'ora per evitare invii multipli
+            await asyncio.sleep(300)  
         else:
-            await asyncio.sleep(30)  # Controlla ogni 30 secondi
+            await asyncio.sleep(30)  
 
-# Webhook Telegram
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    """Gestisce il Webhook di Telegram"""
-    data = request.get_json()
-    if not data:
-        return "Bad Request", 400
-
-    update = Update.de_json(data, application.bot)
-    logging.info(f"📩 Ricevuto update: {update}")
-
+def avvia_classifica_thread():
+    """Avvia il loop per inviare la classifica giornaliera in un thread separato"""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-
-    async def process():
-        """Inizializza l'app e processa l'update"""
-        await application.initialize()  # Necessario per evitare l'errore
-        await application.process_update(update)
-
-    loop.run_until_complete(process())  # Ora l'app è inizializzata prima di processare l'update
-
-    return "OK", 200
+    loop.run_until_complete(invia_classifica_giornaliera())
 
 # Avvio del bot
 if __name__ == "__main__":
     logging.info("⚡ Il bot è avviato!")
+    carica_classifica()
 
-    carica_classifica()  # Carica la classifica dal file
+    # Aggiunta comandi
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("classifica", classifica_bot))
+    application.add_handler(CommandHandler("reset", reset))
+    application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, gestisci_messaggi))
 
-    def avvia_classifica_thread():
-    loop = asyncio.new_event_loop()  # Crea un nuovo event loop
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(invia_classifica_giornaliera())  # Esegue la funzione async
-
-# Avvia la funzione in un thread separato
-threading.Thread(target=avvia_classifica_thread, daemon=True).start()
+    # Avvia il thread per la classifica
+    threading.Thread(target=avvia_classifica_thread, daemon=True).start()
 
     # Avvia il server Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
 
 
 
