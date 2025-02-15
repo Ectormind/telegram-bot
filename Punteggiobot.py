@@ -170,7 +170,13 @@ def webhook():
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.run_until_complete(application.process_update(update))  # ✅ Ora è compatibile con Flask
+
+    async def process():
+        """Inizializza l'app e processa l'update"""
+        await application.initialize()  # ✅ Necessario per evitare l'errore
+        await application.process_update(update)
+
+    loop.run_until_complete(process())  # ✅ Ora l'app è inizializzata prima di processare l'update
 
     return "OK", 200
 
