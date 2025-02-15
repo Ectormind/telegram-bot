@@ -159,18 +159,20 @@ async def process_update_async(update):
     await application.process_update(update)
 
 @app.route("/webhook", methods=["POST"])
-async def webhook():
+def webhook():
     """Gestisce il Webhook di Telegram"""
     data = request.get_json()
     if not data:
-        return "Bad Request", 400  # Se non riceve dati, restituisce errore 400
+        return "Bad Request", 400
 
     update = Update.de_json(data, application.bot)
     logging.info(f"📩 Ricevuto update: {update}")
 
-    await application.process_update(update)  # Ora usa `await` per eseguire il task
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(application.process_update(update))  # ✅ Ora è compatibile con Flask
 
-    return "OK", 200  # Telegram vuole una risposta "OK"
+    return "OK", 200
 
 if __name__ == "__main__":
     logging.info("⚡ Il bot è avviato e in ascolto su Railway...")
