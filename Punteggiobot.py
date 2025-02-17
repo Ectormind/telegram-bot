@@ -149,9 +149,23 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ### --- WEBHOOK TELEGRAM --- ###
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    update = Update.de_json(request.get_json(), application.bot)
-    application.process_update(update)
-    return "OK", 200
+    """Gestisce le richieste Webhook di Telegram"""
+    try:
+        data = request.get_json()
+        if not data:
+            return "Bad Request", 400
+
+        update = Update.de_json(data, application.bot)
+        logging.info(f"📩 Ricevuto update: {update}")
+
+        # Esegui il processamento dell'update in modo asincrono
+        asyncio.run(application.process_update(update))
+
+        return "OK", 200
+    except Exception as e:
+        logging.error(f"❌ Errore Webhook: {e}")
+        return "Internal Server Error", 500
+
 
 ### --- AVVIO DEL BOT --- ###
 if __name__ == "__main__":
