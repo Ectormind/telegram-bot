@@ -17,6 +17,9 @@ TOKEN = os.getenv("TOKEN")
 # Webhook URL - sostituiscilo con il dominio Railway generato
 WEBHOOK_URL = "https://telegram-bot-production-2303.up.railway.app"
 
+# Variabile per memorizzare l'ultima chat che ha richiesto la classifica
+ultimo_chat_id = None  
+
 # Dizionario per memorizzare la classifica degli utenti
 classifica = {}
 
@@ -59,7 +62,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Ciao! Invia un messaggio con un hashtag per accumulare punti!")
 
 async def classifica_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra la classifica attuale"""
+    """Mostra la classifica attuale e salva l'ID della chat"""
+    global ultimo_chat_id
+    ultimo_chat_id = update.message.chat_id  # Memorizza l'ultima chat
+
     if not classifica:
         await update.message.reply_text("🏆 La classifica è vuota!")
         return
@@ -111,51 +117,77 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"{utente}, hai già usato questi hashtag oggi. ⏳ Prova domani!")
 
+### --- INVIO AUTOMATICO DELLA CLASSIFICA A MEZZANOTTE --- ###
+
+async def invia_classifica_giornaliera():
+    """Invia automaticamente la classifica alle 00:00 se ci sono stati aggiornamenti"""
+    global ultimo_chat_id
+    while True:
+        ora_corrente = datetime.datetime.now().time()
+        if ora_corrente.hour == 0 and ora_corrente.minute < 5:  # Controlla tra mezzanotte e le 00:05
+            if classifica and ultimo_chat_id:
+                classifica_ordinata = sorted(classifica.items(), key=lambda x: x[1], reverse=True)
+                messaggio = "🏆 Classifica giornaliera 🏆\n"
+                for utente, punti in classifica_ordinata:
+                    messaggio += f"{utente}: {punti} punti\n"
+
+                try:
+                    await application.bot.send_message(chat_id=ultimo_chat_id, text=messaggio)
+                    logging.info(f"✅ Classifica inviata alla chat {ultimo_chat_id}")
+                except Exception as e:
+                    logging.error(f"❌ Errore nell'invio della classifica: {e}")
+
+            await asyncio.sleep(60)  # Evita invii multipli
+        await asyncio.sleep(30)  # Controlla ogni 30 secondi
+
+def avvia_classifica_thread():
+    """Avvia il loop per inviare la classifica giornaliera in un thread separato"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(invia_classifica_giornaliera())
+
 # Aggiunta comandi al bot
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("classifica", classifica_bot))
 application.add_handler(CommandHandler("reset", reset))
 application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, gestisci_messaggi))
 
-### --- WEBHOOK CON FLASK (Corretto `process_update()`) --- ###
-
+### --- WEBHOOK CON FLASK --- ###
 async def process_update_async(update):
     """Inizializza il bot e processa gli aggiornamenti"""
     await application.initialize()
     await application.process_update(update)
 
-@app.route("/", methods=["POST"])
+@app.route("/webhook", methods=["POST"])
 def webhook():
-    """Gestisce le richieste Webhook di Telegram"""
-    update = Update.de_json(request.get_json(), application.bot)
-    logging.info(f"Ricevuto update: {update}")
-    
-    # Esegui la funzione async in un nuovo event loop
+    """Gestisce il Webhook di Telegram"""
+    data = request.get_json()
+    if not data:
+        return "Bad Request", 400
+
+    update = Update.de_json(data, application.bot)
+    logging.info(f"📩 Ricevuto update: {update}")
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.run_until_complete(process_update_async(update))
-    
-    return "OK", 200
 
-### --- AVVIO DEL SERVER CON KEEP-ALIVE --- ###
-def keep_alive():
-    """Ping ogni 5 minuti per mantenere attivo Railway"""
-    import time
-    import requests
-    while True:
-        time.sleep(300)
-        try:
-            requests.get(WEBHOOK_URL)
-            logging.info("🔄 Ping inviato per mantenere Railway attivo")
-        except Exception as e:
-            logging.error(f"⚠️ Errore nel ping: {e}")
+    async def process():
+        """Inizializza l'app e processa l'update"""
+        await application.initialize()  # ✅ Necessario per evitare l'errore
+        await application.process_update(update)
+
+    loop.run_until_complete(process())  # ✅ Ora l'app è inizializzata prima di processare l'update
+
+    return "OK", 200
 
 if __name__ == "__main__":
     logging.info("⚡ Il bot è avviato e in ascolto su Railway...")
     
-    # Avvia il ping per evitare che Railway chiuda il bot
-    threading.Thread(target=keep_alive, daemon=True).start()
+    threading.Thread(target=avvia_classifica_thread, daemon=True).start()
 
     # Avvia il server Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
+
+
 
