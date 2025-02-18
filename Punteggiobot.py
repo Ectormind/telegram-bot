@@ -170,7 +170,6 @@ def webhook():
         return "Internal Server Error", 500
 
 
-
 ### --- AVVIO DEL BOT --- ###
 if __name__ == "__main__":
     logging.info("⚡ Il bot è avviato!")
