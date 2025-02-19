@@ -2,7 +2,6 @@ import datetime
 import asyncio
 import os
 import logging
-import threading
 import psycopg2
 from psycopg2.extras import DictCursor
 from flask import Flask, request
@@ -13,14 +12,13 @@ from waitress import serve
 # Configurazione Logging
 logging.basicConfig(level=logging.INFO)
 
-# Ottieni il TOKEN e il DATABASE_URL dalle variabili d'ambiente
+# Legge il token del bot e la stringa di connessione al database
 TOKEN = os.getenv("TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
-WEBHOOK_URL = "https://telegram-bot-production-2303.up.railway.app"
 
-# Variabili globali
-ultimo_chat_id = None  
-ultima_data_invio = None  
+# Inizializza Flask e il bot di Telegram
+app = Flask(__name__)
+application = Application.builder().token(TOKEN).build()
 
 # Dizionario con le parole e i relativi punteggi
 parole_punteggio = {
@@ -45,88 +43,68 @@ parole_punteggio = {
     "#fotofinale": 10
 }
 
-# Inizializza Flask e il bot
-app = Flask(__name__)
-application = Application.builder().token(TOKEN).build()
-
-### --- CONNESSIONE AL DATABASE --- ###
+# Connessione al database PostgreSQL
 def connessione_db():
-    """Crea una connessione al database PostgreSQL."""
     return psycopg2.connect(DATABASE_URL, sslmode="require", cursor_factory=DictCursor)
 
+# Crea la tabella della classifica se non esiste
 def crea_tabella_classifica():
-    """Crea la tabella della classifica se non esiste."""
     with connessione_db() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS classifica (
-                    id SERIAL PRIMARY KEY,
-                    utente TEXT UNIQUE NOT NULL,
-                    punti INTEGER NOT NULL DEFAULT 0
+                    utente TEXT PRIMARY KEY,
+                    punti INTEGER NOT NULL
                 );
             """)
             conn.commit()
-    logging.info("📌 Tabella classifica pronta!")
+            logging.info("📌 Tabella classifica pronta!")
 
-### --- GESTIONE CLASSIFICA --- ###
-def salva_classifica(utente, punti):
-    """Aggiorna la classifica nel database PostgreSQL."""
-    with connessione_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO classifica (utente, punti)
-                VALUES (%s, %s)
-                ON CONFLICT (utente) DO UPDATE SET punti = classifica.punti + EXCLUDED.punti;
-            """, (utente, punti))
-            conn.commit()
-    logging.info(f"✅ Classifica aggiornata: {utente} ha ora {punti} punti")
-
+# Ottiene la classifica dal database
 def carica_classifica():
-    """Carica la classifica dal database."""
-    global classifica
-    classifica = {}
     with connessione_db() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT utente, punti FROM classifica ORDER BY punti DESC;")
-            for row in cur.fetchall():
-                classifica[row["utente"]] = row["punti"]
-    logging.info("📌 Classifica caricata dal database!")
+            return dict(cur.fetchall())
 
-def reset_classifica():
-    """Resetta la classifica nel database."""
+# Salva i punteggi nel database
+def aggiorna_punteggio(utente, punti):
+    with connessione_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO classifica (utente, punti) 
+                VALUES (%s, %s)
+                ON CONFLICT (utente) DO UPDATE 
+                SET punti = classifica.punti + EXCLUDED.punti;
+            """, (utente, punti))
+            conn.commit()
+
+# Reset della classifica
+async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with connessione_db() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM classifica;")
             conn.commit()
-    logging.info("🔄 Classifica resettata!")
+    await update.message.reply_text("🔄 Classifica resettata con successo!")
 
-### --- FUNZIONI DEL BOT --- ###
+# Messaggio di benvenuto
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Messaggio di benvenuto"""
     await update.message.reply_text("Ciao! Invia un messaggio con un hashtag per accumulare punti!")
 
+# Comando per vedere la classifica attuale
 async def classifica_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra la classifica attuale."""
-    global ultimo_chat_id
-    ultimo_chat_id = update.message.chat_id  
-
-    carica_classifica()  # Carica sempre l'ultima classifica aggiornata
-
+    classifica = carica_classifica()
+    
     if not classifica:
         await update.message.reply_text("🏆 La classifica è vuota!")
         return
 
-    classifica_ordinata = sorted(classifica.items(), key=lambda x: x[1], reverse=True)
-    messaggio = "🏆 Classifica attuale:\n" + "\n".join(f"{u}: {p} punti" for u, p in classifica_ordinata)
+    messaggio = "🏆 Classifica attuale:\n" + "\n".join(f"{u}: {p} punti" for u, p in classifica.items())
     await update.message.reply_text(messaggio)
 
-async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Resetta la classifica nel database"""
-    reset_classifica()
-    await update.message.reply_text("🔄 Classifica e limitazioni resettate con successo!")
-
+# Funzione per gestire i messaggi e assegnare punti
 async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Aggiunge punti agli utenti in base agli hashtag nei messaggi."""
+    """Gestisce i messaggi e assegna punti in base agli hashtag"""
     messaggio = update.message.text or update.message.caption
     if not messaggio:
         return  
@@ -135,26 +113,19 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not utente:
         return  
 
-    oggi = datetime.date.today()
-    punti_totali = 0
-
-    for parola, punti in parole_punteggio.items():
-        if parola in messaggio:
-            punti_totali += punti
+    punti_totali = sum(punti for parola, punti in parole_punteggio.items() if parola in messaggio)
 
     if punti_totali > 0:
-        salva_classifica(utente, punti_totali)  # Salva direttamente nel DB
-try:
-    await update.message.reply_text(f"{utente} ha guadagnato {punti_totali} punti! 🎉")
-except telegram.error.NetworkError as e:
-    logging.error(f"❌ Errore di rete con Telegram: {e}")
-except Exception as e:
-    logging.error(f"❌ Errore imprevisto nell'invio del messaggio: {e}")
+        aggiorna_punteggio(utente, punti_totali)
+        try:
+            await update.message.reply_text(f"{utente} ha guadagnato {punti_totali} punti! 🎉")
+        except Exception as e:
+            logging.error(f"❌ Errore nell'invio del messaggio: {e}")
 
-### --- WEBHOOK TELEGRAM --- ###
+# Webhook Telegram
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    """Gestisce le richieste Webhook di Telegram senza chiudere il loop."""
+    """Gestisce le richieste Webhook di Telegram"""
     try:
         data = request.get_json()
         if not data:
@@ -163,23 +134,40 @@ def webhook():
         update = Update.de_json(data, application.bot)
         logging.info(f"📩 Ricevuto update: {update}")
 
-        # Inizializza il bot UNA SOLA VOLTA prima di processare gli update
-        if not application._initialized:  
-            asyncio.create_task(application.initialize())
-
-        asyncio.create_task(application.process_update(update))
+        asyncio.run(application.process_update(update))
 
         return "OK", 200
     except Exception as e:
         logging.error(f"❌ Errore Webhook: {e}")
         return "Internal Server Error", 500
 
+# Invio classifica giornaliera
+async def invia_classifica_giornaliera():
+    """Invia automaticamente la classifica alle 00:00 una sola volta"""
+    while True:
+        ora_corrente = datetime.datetime.now()
+        if ora_corrente.hour == 0 and ora_corrente.minute < 5:
+            classifica = carica_classifica()
+            if classifica:
+                messaggio = "🏆 Classifica giornaliera 🏆\n" + "\n".join(f"{u}: {p} punti" for u, p in classifica.items())
+                try:
+                    await application.bot.send_message(chat_id=os.getenv("CHAT_ID"), text=messaggio)
+                    logging.info("✅ Classifica inviata con successo!")
+                except Exception as e:
+                    logging.error(f"❌ Errore nell'invio della classifica: {e}")
+            await asyncio.sleep(300)  
+        else:
+            await asyncio.sleep(30)  
 
-### --- AVVIO DEL BOT --- ###
+def avvia_classifica_thread():
+    """Avvia il loop per inviare la classifica giornaliera in un thread separato"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(invia_classifica_giornaliera())
+
+# Avvio del bot
 if __name__ == "__main__":
     logging.info("⚡ Il bot è avviato!")
-    
-    # Crea la tabella se non esiste
     crea_tabella_classifica()
 
     # Aggiunta comandi
@@ -187,6 +175,10 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("classifica", classifica_bot))
     application.add_handler(CommandHandler("reset", reset))
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, gestisci_messaggi))
+
+    # Avvia il thread per la classifica
+    from threading import Thread
+    Thread(target=avvia_classifica_thread, daemon=True).start()
 
     # Avvia il server Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
