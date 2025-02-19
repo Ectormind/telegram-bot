@@ -124,8 +124,9 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Webhook Telegram
 @app.route("/webhook", methods=["POST"])
+@app.route("/webhook", methods=["POST"])
 def webhook():
-    """Gestisce le richieste Webhook di Telegram"""
+    """Gestisce le richieste Webhook di Telegram."""
     try:
         data = request.get_json()
         if not data:
@@ -134,7 +135,9 @@ def webhook():
         update = Update.de_json(data, application.bot)
         logging.info(f"📩 Ricevuto update: {update}")
 
-        asyncio.run(application.process_update(update))
+        # Esegui il processamento dell'update in un nuovo thread per evitare problemi con asyncio
+        from threading import Thread
+        Thread(target=lambda: asyncio.run(application.process_update(update))).start()
 
         return "OK", 200
     except Exception as e:
