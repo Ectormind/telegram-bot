@@ -144,12 +144,17 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if punti_totali > 0:
         salva_classifica(utente, punti_totali)  # Salva direttamente nel DB
-        await update.message.reply_text(f"{utente} ha guadagnato {punti_totali} punti! 🎉")
+try:
+    await update.message.reply_text(f"{utente} ha guadagnato {punti_totali} punti! 🎉")
+except telegram.error.NetworkError as e:
+    logging.error(f"❌ Errore di rete con Telegram: {e}")
+except Exception as e:
+    logging.error(f"❌ Errore imprevisto nell'invio del messaggio: {e}")
 
 ### --- WEBHOOK TELEGRAM --- ###
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    """Gestisce le richieste Webhook di Telegram."""
+    """Gestisce le richieste Webhook di Telegram senza chiudere il loop."""
     try:
         data = request.get_json()
         if not data:
@@ -160,9 +165,9 @@ def webhook():
 
         # Inizializza il bot UNA SOLA VOLTA prima di processare gli update
         if not application._initialized:  
-            asyncio.run(application.initialize())  
+            asyncio.create_task(application.initialize())
 
-        asyncio.run(application.process_update(update))  
+        asyncio.create_task(application.process_update(update))
 
         return "OK", 200
     except Exception as e:
