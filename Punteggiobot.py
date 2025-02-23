@@ -95,7 +95,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 📌 Comando per visualizzare la classifica
 async def classifica_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     classifica = carica_classifica()
-    
+
     if not classifica:
         await update.message.reply_text("🏆 La classifica è vuota!")
         return
@@ -108,11 +108,11 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gestisce i messaggi e assegna punti in base agli hashtag"""
     messaggio = update.message.text or update.message.caption
     if not messaggio:
-        return  
+        return
 
     utente = update.message.from_user.username or update.message.from_user.first_name
     if not utente:
-        return  
+        return
 
     punti_totali = sum(punti for parola, punti in parole_punteggio.items() if parola in messaggio)
 
@@ -137,8 +137,7 @@ async def webhook():
         logging.info(f"📩 Ricevuto update: {update}")
 
         # ✅ Processa l'update in modo asincrono senza chiudere il loop
-        loop = asyncio.get_running_loop()
-        loop.create_task(application.process_update(update))
+        await application.process_update(update)
 
         return jsonify({"status": "OK"}), 200
 
@@ -160,12 +159,12 @@ async def invia_classifica_giornaliera():
                     logging.info("✅ Classifica inviata con successo!")
                 except Exception as e:
                     logging.error(f"❌ Errore nell'invio della classifica: {e}")
-            await asyncio.sleep(300)  
+            await asyncio.sleep(300)
         else:
-            await asyncio.sleep(30)  
+            await asyncio.sleep(30)
 
 # 📌 Avvio del bot
-if __name__ == "__main__":
+async def main():
     logging.info("⚡ Il bot è avviato!")
     crea_tabella_classifica()
 
@@ -174,8 +173,14 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("reset", reset))
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, gestisci_messaggi))
 
+    await application.initialize()
+    asyncio.create_task(invia_classifica_giornaliera())
+
     # Avvia Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
+if __name__ == "__main__":
+    asyncio.run(main())
 
 
 
