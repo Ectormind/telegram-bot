@@ -123,17 +123,11 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.error(f"❌ Errore nell'invio del messaggio: {e}")
 
-# 📌 Webhook Telegram **(CORRETTO)**
+# 📌 Webhook Telegram (CORRETTO)
 @app.route("/webhook", methods=["POST"])
 async def webhook():
     """Gestisce le richieste Webhook di Telegram."""
     try:
-        # ✅ Controlla il Content-Type della richiesta
-        if request.content_type != "application/json":
-            logging.error("❌ Webhook ricevuto con Content-Type errato!")
-            return jsonify({"error": "Unsupported Media Type"}), 415
-
-        # ✅ Estrai i dati JSON
         data = request.get_json(silent=True)
         if not data:
             logging.error("❌ Nessun dato JSON valido ricevuto!")
@@ -142,9 +136,9 @@ async def webhook():
         update = Update.de_json(data, application.bot)
         logging.info(f"📩 Ricevuto update: {update}")
 
-        # ✅ Inizializza e processa l'update
-        await application.initialize()
-        await application.process_update(update)
+        # ✅ Processa l'update in modo asincrono senza chiudere il loop
+        loop = asyncio.get_running_loop()
+        loop.create_task(application.process_update(update))
 
         return jsonify({"status": "OK"}), 200
 
@@ -182,6 +176,7 @@ if __name__ == "__main__":
 
     # Avvia Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
 
 
 
