@@ -8,20 +8,20 @@ from flask import Flask, request, jsonify
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from waitress import serve
-from threading import Thread
 
-# Configurazione Logging
+# 📌 Configurazione Logging
 logging.basicConfig(level=logging.INFO)
 
-# Legge il token del bot e la stringa di connessione al database
+# 📌 Lettura delle variabili d'ambiente
 TOKEN = os.getenv("TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
+CHAT_ID = os.getenv("CHAT_ID")  # ID della chat dove inviare la classifica giornaliera
 
-# Inizializza Flask e il bot di Telegram
+# 📌 Inizializza Flask e il bot Telegram
 app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
 
-# Dizionario con le parole e i relativi punteggi
+# 📌 Dizionario con le parole e i relativi punteggi
 parole_punteggio = {
     "#bilancia": 5,
     "#colazioneequilibrata": 5,
@@ -44,11 +44,11 @@ parole_punteggio = {
     "#fotofinale": 10
 }
 
-# Connessione al database PostgreSQL
+# 📌 Connessione al database PostgreSQL
 def connessione_db():
     return psycopg2.connect(DATABASE_URL, sslmode="require", cursor_factory=DictCursor)
 
-# Crea la tabella della classifica se non esiste
+# 📌 Creazione della tabella classifica
 def crea_tabella_classifica():
     with connessione_db() as conn:
         with conn.cursor() as cur:
@@ -61,14 +61,14 @@ def crea_tabella_classifica():
             conn.commit()
             logging.info("📌 Tabella classifica pronta!")
 
-# Ottiene la classifica dal database
+# 📌 Caricamento classifica dal database
 def carica_classifica():
     with connessione_db() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT utente, punti FROM classifica ORDER BY punti DESC;")
             return dict(cur.fetchall())
 
-# Salva i punteggi nel database
+# 📌 Aggiornamento punteggio nel database
 def aggiorna_punteggio(utente, punti):
     with connessione_db() as conn:
         with conn.cursor() as cur:
@@ -80,7 +80,7 @@ def aggiorna_punteggio(utente, punti):
             """, (utente, punti))
             conn.commit()
 
-# Reset della classifica
+# 📌 Reset della classifica
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with connessione_db() as conn:
         with conn.cursor() as cur:
@@ -88,11 +88,11 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
             conn.commit()
     await update.message.reply_text("🔄 Classifica resettata con successo!")
 
-# Messaggio di benvenuto
+# 📌 Messaggio di benvenuto
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Ciao! Invia un messaggio con un hashtag per accumulare punti!")
 
-# Comando per vedere la classifica attuale
+# 📌 Comando per visualizzare la classifica
 async def classifica_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     classifica = carica_classifica()
     
@@ -103,7 +103,7 @@ async def classifica_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     messaggio = "🏆 Classifica attuale:\n" + "\n".join(f"{u}: {p} punti" for u, p in classifica.items())
     await update.message.reply_text(messaggio)
 
-# Funzione per gestire i messaggi e assegnare punti
+# 📌 Gestione dei messaggi per assegnare punti
 async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gestisce i messaggi e assegna punti in base agli hashtag"""
     messaggio = update.message.text or update.message.caption
@@ -123,7 +123,7 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.error(f"❌ Errore nell'invio del messaggio: {e}")
 
-# ✅ Webhook Telegram con fix per event loop
+# 📌 Webhook Telegram
 @app.route("/webhook", methods=["POST"])
 def webhook():
     """Gestisce le richieste Webhook di Telegram."""
@@ -142,8 +142,12 @@ def webhook():
         update = Update.de_json(data, application.bot)
         logging.info(f"📩 Ricevuto update: {update}")
 
-        # ✅ Processa l'update in un nuovo thread per evitare problemi con asyncio
-        Thread(target=asyncio.run, args=(application.process_update(update),)).start()
+        # ✅ Inizializza l'applicazione prima di processare l'update
+        async def process_update():
+            await application.initialize()
+            await application.process_update(update)
+
+        asyncio.run(process_update())  # ✅ Ora è garantito che application sia inizializzato
 
         return jsonify({"status": "OK"}), 200
 
@@ -151,7 +155,31 @@ def webhook():
         logging.error(f"❌ Errore Webhook: {e}")
         return jsonify({"error": "Internal Server Error"}), 500
 
-# Avvio del bot
+# 📌 Invio automatico della classifica a mezzanotte
+async def invia_classifica_giornaliera():
+    """Invia automaticamente la classifica alle 00:00 una sola volta"""
+    while True:
+        ora_corrente = datetime.datetime.now()
+        if ora_corrente.hour == 0 and ora_corrente.minute < 5:
+            classifica = carica_classifica()
+            if classifica:
+                messaggio = "🏆 Classifica giornaliera 🏆\n" + "\n".join(f"{u}: {p} punti" for u, p in classifica.items())
+                try:
+                    await application.bot.send_message(chat_id=CHAT_ID, text=messaggio)
+                    logging.info("✅ Classifica inviata con successo!")
+                except Exception as e:
+                    logging.error(f"❌ Errore nell'invio della classifica: {e}")
+            await asyncio.sleep(300)  
+        else:
+            await asyncio.sleep(30)  
+
+def avvia_classifica_thread():
+    """Avvia il loop per inviare la classifica giornaliera in un thread separato"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(invia_classifica_giornaliera())
+
+# 📌 Avvio del bot
 if __name__ == "__main__":
     logging.info("⚡ Il bot è avviato!")
     crea_tabella_classifica()
@@ -162,7 +190,12 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("reset", reset))
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, gestisci_messaggi))
 
+    # Avvia il thread per la classifica
+    from threading import Thread
+    Thread(target=avvia_classifica_thread, daemon=True).start()
+
     # Avvia il server Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
 
 
