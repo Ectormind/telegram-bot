@@ -123,9 +123,9 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.error(f"❌ Errore nell'invio del messaggio: {e}")
 
-# 📌 Webhook Telegram
+# 📌 Webhook Telegram **(CORRETTO)**
 @app.route("/webhook", methods=["POST"])
-def webhook():
+async def webhook():
     """Gestisce le richieste Webhook di Telegram."""
     try:
         # ✅ Controlla il Content-Type della richiesta
@@ -142,12 +142,9 @@ def webhook():
         update = Update.de_json(data, application.bot)
         logging.info(f"📩 Ricevuto update: {update}")
 
-        # ✅ Inizializza l'applicazione prima di processare l'update
-        async def process_update():
-            await application.initialize()
-            await application.process_update(update)
-
-        asyncio.run(process_update())  # ✅ Ora è garantito che application sia inizializzato
+        # ✅ Inizializza e processa l'update
+        await application.initialize()
+        await application.process_update(update)
 
         return jsonify({"status": "OK"}), 200
 
@@ -173,29 +170,19 @@ async def invia_classifica_giornaliera():
         else:
             await asyncio.sleep(30)  
 
-def avvia_classifica_thread():
-    """Avvia il loop per inviare la classifica giornaliera in un thread separato"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(invia_classifica_giornaliera())
-
 # 📌 Avvio del bot
 if __name__ == "__main__":
     logging.info("⚡ Il bot è avviato!")
     crea_tabella_classifica()
 
-    # Aggiunta comandi
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("classifica", classifica_bot))
     application.add_handler(CommandHandler("reset", reset))
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, gestisci_messaggi))
 
-    # Avvia il thread per la classifica
-    from threading import Thread
-    Thread(target=avvia_classifica_thread, daemon=True).start()
-
-    # Avvia il server Flask con Waitress
+    # Avvia Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
 
 
 
