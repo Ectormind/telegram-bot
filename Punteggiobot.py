@@ -123,7 +123,7 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.error(f"❌ Errore nell'invio del messaggio: {e}")
 
-# ✅ Webhook Telegram con fix per errore 415
+# ✅ Webhook Telegram con fix per errore 415 e event loop
 @app.route("/webhook", methods=["POST"])
 def webhook():
     """Gestisce le richieste Webhook di Telegram."""
@@ -134,7 +134,7 @@ def webhook():
             return jsonify({"error": "Unsupported Media Type"}), 415
 
         # ✅ Estrai i dati JSON
-        data = request.get_json(force=True, silent=True)
+        data = request.get_json(silent=True)
         if not data:
             logging.error("❌ Nessun dato JSON valido ricevuto!")
             return jsonify({"error": "Bad Request"}), 400
@@ -142,38 +142,14 @@ def webhook():
         update = Update.de_json(data, application.bot)
         logging.info(f"📩 Ricevuto update: {update}")
 
-        # ✅ Processa l'update in un thread per evitare problemi con asyncio
-        asyncio.run_coroutine_threadsafe(application.process_update(update), asyncio.get_event_loop())
+        # ✅ Processa l'update in un task asincrono
+        application.create_task(application.process_update(update))
 
         return jsonify({"status": "OK"}), 200
 
     except Exception as e:
         logging.error(f"❌ Errore Webhook: {e}")
         return jsonify({"error": "Internal Server Error"}), 500
-
-# Invio classifica giornaliera
-async def invia_classifica_giornaliera():
-    """Invia automaticamente la classifica alle 00:00 una sola volta"""
-    while True:
-        ora_corrente = datetime.datetime.now()
-        if ora_corrente.hour == 0 and ora_corrente.minute < 5:
-            classifica = carica_classifica()
-            if classifica:
-                messaggio = "🏆 Classifica giornaliera 🏆\n" + "\n".join(f"{u}: {p} punti" for u, p in classifica.items())
-                try:
-                    await application.bot.send_message(chat_id=os.getenv("CHAT_ID"), text=messaggio)
-                    logging.info("✅ Classifica inviata con successo!")
-                except Exception as e:
-                    logging.error(f"❌ Errore nell'invio della classifica: {e}")
-            await asyncio.sleep(300)  
-        else:
-            await asyncio.sleep(30)  
-
-def avvia_classifica_thread():
-    """Avvia il loop per inviare la classifica giornaliera in un thread separato"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(invia_classifica_giornaliera())
 
 # Avvio del bot
 if __name__ == "__main__":
@@ -186,9 +162,7 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("reset", reset))
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, gestisci_messaggi))
 
-    # Avvia il thread per la classifica
-    Thread(target=avvia_classifica_thread, daemon=True).start()
-
     # Avvia il server Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
 
