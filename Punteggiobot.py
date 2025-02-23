@@ -179,7 +179,14 @@ async def main():
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, gestisci_messaggi))
     await application.initialize()
     asyncio.create_task(invia_classifica_giornaliera())
-    serve(app, host="0.0.0.0", port=8080
+    serve(app, host="0.0.0.0", port=8080)
+    await asyncio.Future()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+
 
 
 
