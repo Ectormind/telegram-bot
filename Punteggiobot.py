@@ -4,10 +4,11 @@ import os
 import logging
 import psycopg2
 from psycopg2.extras import DictCursor
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from waitress import serve
+from threading import Thread
 
 # Configurazione Logging
 logging.basicConfig(level=logging.INFO)
@@ -122,27 +123,33 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.error(f"❌ Errore nell'invio del messaggio: {e}")
 
-# Webhook Telegram
-@app.route("/webhook", methods=["POST"])
+# ✅ Webhook Telegram con fix per errore 415
 @app.route("/webhook", methods=["POST"])
 def webhook():
     """Gestisce le richieste Webhook di Telegram."""
     try:
-        data = request.get_json()
+        # ✅ Controlla il Content-Type della richiesta
+        if request.content_type != "application/json":
+            logging.error("❌ Webhook ricevuto con Content-Type errato!")
+            return jsonify({"error": "Unsupported Media Type"}), 415
+
+        # ✅ Estrai i dati JSON
+        data = request.get_json(force=True, silent=True)
         if not data:
-            return "Bad Request", 400
+            logging.error("❌ Nessun dato JSON valido ricevuto!")
+            return jsonify({"error": "Bad Request"}), 400
 
         update = Update.de_json(data, application.bot)
         logging.info(f"📩 Ricevuto update: {update}")
 
-        # Esegui il processamento dell'update in un nuovo thread per evitare problemi con asyncio
-        from threading import Thread
-        Thread(target=lambda: asyncio.run(application.process_update(update))).start()
+        # ✅ Processa l'update in un thread per evitare problemi con asyncio
+        asyncio.run_coroutine_threadsafe(application.process_update(update), asyncio.get_event_loop())
 
-        return "OK", 200
+        return jsonify({"status": "OK"}), 200
+
     except Exception as e:
         logging.error(f"❌ Errore Webhook: {e}")
-        return "Internal Server Error", 500
+        return jsonify({"error": "Internal Server Error"}), 500
 
 # Invio classifica giornaliera
 async def invia_classifica_giornaliera():
@@ -180,8 +187,8 @@ if __name__ == "__main__":
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, gestisci_messaggi))
 
     # Avvia il thread per la classifica
-    from threading import Thread
     Thread(target=avvia_classifica_thread, daemon=True).start()
 
     # Avvia il server Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
