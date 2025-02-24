@@ -134,7 +134,7 @@ def webhook():
         update = Update.de_json(data, application.bot)
         logging.info(f"📩 Ricevuto update: {update}")
 
-        # ✅ Usa `get_event_loop()` per evitare errori di loop chiuso
+        # ✅ Avvia un loop separato per processare l'update
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(application.process_update(update))
@@ -146,27 +146,19 @@ def webhook():
         logging.error(f"❌ Errore Webhook: {e}")
         return jsonify({"error": "Internal Server Error"}), 500
 
-# 📌 Invio automatico della classifica a mezzanotte
-async def invia_classifica_giornaliera():
-    while True:
-        ora_corrente = datetime.datetime.now()
-        if ora_corrente.hour == 0 and ora_corrente.minute < 5:
-            classifica = carica_classifica()
-            if classifica:
-                messaggio = "🏆 Classifica giornaliera 🏆\n" + "\n".join(f"{u}: {p} punti" for u, p in classifica.items())
-                try:
-                    await application.bot.send_message(chat_id=CHAT_ID, text=messaggio)
-                    logging.info("✅ Classifica inviata con successo!")
-                except Exception as e:
-                    logging.error(f"❌ Errore nell'invio della classifica: {e}")
-            await asyncio.sleep(300)  
-        else:
-            await asyncio.sleep(30)  
+# 📌 Inizializzazione dell'applicazione all'avvio
+async def avvia_bot():
+    """Inizializza l'applicazione Telegram."""
+    await application.initialize()
+    logging.info("✅ Applicazione Telegram inizializzata correttamente!")
 
 # 📌 Avvio del bot
 if __name__ == "__main__":
     logging.info("⚡ Il bot è avviato!")
     crea_tabella_classifica()
+
+    # ✅ Inizializza il bot prima di aggiungere gli handler
+    asyncio.run(avvia_bot())
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("classifica", classifica_bot))
@@ -175,6 +167,8 @@ if __name__ == "__main__":
 
     # Avvia Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
+
 
 
 
