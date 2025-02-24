@@ -21,14 +21,6 @@ CHAT_ID = os.getenv("CHAT_ID")
 app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
 
-# 📌 Avvia il loop principale di asyncio
-async def avvia_bot():
-    """Inizializza il bot Telegram una sola volta"""
-    await application.initialize()
-
-# 🚀 Avvia il bot nel loop di asyncio PRIMA che Flask parta
-asyncio.run(avvia_bot())
-
 # 📌 Dizionario con le parole e i relativi punteggi
 parole_punteggio = {
     "#bilancia": 5,
@@ -130,7 +122,7 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.error(f"❌ Errore nell'invio del messaggio: {e}")
 
-# 📌 Webhook Telegram (CORRETTO)
+# 📌 Webhook Telegram (FIXATO!)
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
@@ -142,9 +134,11 @@ def webhook():
         update = Update.de_json(data, application.bot)
         logging.info(f"📩 Ricevuto update: {update}")
 
-        # ✅ Esegui il processo in modo asincrono senza chiudere il loop
-        loop = asyncio.get_running_loop()
-        loop.create_task(application.process_update(update))
+        # ✅ Usa `get_event_loop()` per evitare errori di loop chiuso
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(application.process_update(update))
+        loop.close()
 
         return jsonify({"status": "OK"}), 200
 
@@ -181,6 +175,7 @@ if __name__ == "__main__":
 
     # Avvia Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
 
 
 
