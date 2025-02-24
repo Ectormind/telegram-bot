@@ -15,14 +15,19 @@ logging.basicConfig(level=logging.INFO)
 # 📌 Lettura delle variabili d'ambiente
 TOKEN = os.getenv("TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
-CHAT_ID = os.getenv("CHAT_ID")  # ID della chat per la classifica giornaliera
+CHAT_ID = os.getenv("CHAT_ID")
 
 # 📌 Inizializza Flask e il bot Telegram
 app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
 
-# 📌 Inizializza il bot (risolve il problema)
-asyncio.run(application.initialize())
+# 📌 Avvia il loop principale di asyncio
+async def avvia_bot():
+    """Inizializza il bot Telegram una sola volta"""
+    await application.initialize()
+
+# 🚀 Avvia il bot nel loop di asyncio PRIMA che Flask parta
+asyncio.run(avvia_bot())
 
 # 📌 Dizionario con le parole e i relativi punteggi
 parole_punteggio = {
@@ -127,7 +132,7 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # 📌 Webhook Telegram (CORRETTO)
 @app.route("/webhook", methods=["POST"])
-async def webhook():
+def webhook():
     try:
         data = request.get_json(silent=True)
         if not data:
@@ -137,8 +142,9 @@ async def webhook():
         update = Update.de_json(data, application.bot)
         logging.info(f"📩 Ricevuto update: {update}")
 
-        # ✅ Processa l'update in modo asincrono senza chiudere il loop
-        asyncio.create_task(application.process_update(update))
+        # ✅ Esegui il processo in modo asincrono senza chiudere il loop
+        loop = asyncio.get_running_loop()
+        loop.create_task(application.process_update(update))
 
         return jsonify({"status": "OK"}), 200
 
@@ -175,6 +181,7 @@ if __name__ == "__main__":
 
     # Avvia Flask con Waitress
     serve(app, host="0.0.0.0", port=8080)
+
 
 
 
