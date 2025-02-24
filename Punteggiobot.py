@@ -15,11 +15,14 @@ logging.basicConfig(level=logging.INFO)
 # 📌 Lettura delle variabili d'ambiente
 TOKEN = os.getenv("TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
-CHAT_ID = os.getenv("CHAT_ID")  # ID della chat dove inviare la classifica giornaliera
+CHAT_ID = os.getenv("CHAT_ID")  # ID della chat per la classifica giornaliera
 
 # 📌 Inizializza Flask e il bot Telegram
 app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
+
+# 📌 Inizializza il bot (risolve il problema)
+asyncio.run(application.initialize())
 
 # 📌 Dizionario con le parole e i relativi punteggi
 parole_punteggio = {
@@ -105,7 +108,6 @@ async def classifica_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # 📌 Gestione dei messaggi per assegnare punti
 async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestisce i messaggi e assegna punti in base agli hashtag"""
     messaggio = update.message.text or update.message.caption
     if not messaggio:
         return  
@@ -126,7 +128,6 @@ async def gestisci_messaggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 📌 Webhook Telegram (CORRETTO)
 @app.route("/webhook", methods=["POST"])
 async def webhook():
-    """Gestisce le richieste Webhook di Telegram."""
     try:
         data = request.get_json(silent=True)
         if not data:
@@ -137,8 +138,7 @@ async def webhook():
         logging.info(f"📩 Ricevuto update: {update}")
 
         # ✅ Processa l'update in modo asincrono senza chiudere il loop
-        loop = asyncio.get_running_loop()
-        loop.create_task(application.process_update(update))
+        asyncio.create_task(application.process_update(update))
 
         return jsonify({"status": "OK"}), 200
 
@@ -148,7 +148,6 @@ async def webhook():
 
 # 📌 Invio automatico della classifica a mezzanotte
 async def invia_classifica_giornaliera():
-    """Invia automaticamente la classifica alle 00:00 una sola volta"""
     while True:
         ora_corrente = datetime.datetime.now()
         if ora_corrente.hour == 0 and ora_corrente.minute < 5:
