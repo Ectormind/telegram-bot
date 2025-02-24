@@ -134,12 +134,19 @@ def webhook():
         update = Update.de_json(data, application.bot)
         logging.info(f"📩 Ricevuto update: {update}")
 
-        # ✅ Avvia un loop separato per processare l'update
+        # ✅ Usa il loop esistente invece di crearne uno nuovo
+        loop = asyncio.get_running_loop()
+        loop.create_task(application.process_update(update))
+
+        return jsonify({"status": "OK"}), 200
+
+    except RuntimeError:
+        # ✅ Se non c'è un loop attivo, ne creiamo uno nuovo
+        logging.warning("⚠️ Nessun loop attivo, creando un nuovo loop per gestire l'update.")
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(application.process_update(update))
         loop.close()
-
         return jsonify({"status": "OK"}), 200
 
     except Exception as e:
